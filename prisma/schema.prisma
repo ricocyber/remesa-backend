@@ -1,0 +1,170 @@
+// ╔═══════════════════════════════════════════════════════════╗
+// ║                  DATABASE SCHEMA                          ║
+// ║            Prisma ORM - PostgreSQL                        ║
+// ╚═══════════════════════════════════════════════════════════╝
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// USER - The sender (in USA)
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid())
+  phone         String    @unique          // +1-323-555-1234
+  phoneVerified Boolean   @default(false)
+
+  // Profile
+  firstName     String?
+  lastName      String?
+  email         String?   @unique
+
+  // KYC (Know Your Customer)
+  kycStatus     KycStatus @default(PENDING)
+  kycData       Json?     // Stores ID verification data
+
+  // Wallet
+  stellarAddress String?  // Their Stellar wallet address
+
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  recipients    Recipient[]
+  transfers     Transfer[]  @relation("SenderTransfers")
+
+  @@index([phone])
+}
+
+enum KycStatus {
+  PENDING       // Not started
+  IN_REVIEW     // Documents submitted
+  VERIFIED      // Approved
+  REJECTED      // Failed verification
+}
+
+// ─────────────────────────────────────────────────────────────
+// RECIPIENT - The receiver (in Mexico/LATAM)
+// ─────────────────────────────────────────────────────────────
+
+model Recipient {
+  id            String    @id @default(uuid())
+
+  // Owner
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+
+  // Recipient info
+  firstName     String
+  lastName      String
+  phone         String    // +52-33-555-6789
+  country       String    @default("MEX")
+
+  // Payout method
+  payoutMethod  PayoutMethod @default(BANK_TRANSFER)
+  bankName      String?
+  bankAccount   String?   // Encrypted in production
+  clabe         String?   // Mexican bank code (18 digits)
+
+  // For cash pickup
+  pickupLocation String?
+
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  transfers     Transfer[]
+
+  @@index([userId])
+}
+
+enum PayoutMethod {
+  BANK_TRANSFER   // Direct to bank account
+  CASH_PICKUP     // Pickup at Oxxo, etc.
+  MOBILE_WALLET   // Future: digital wallet
+}
+
+// ─────────────────────────────────────────────────────────────
+// TRANSFER - The money transfer
+// ─────────────────────────────────────────────────────────────
+
+model Transfer {
+  id              String    @id @default(uuid())
+  trackingNumber  String    @unique @default(uuid())  // Human-readable tracking
+
+  // Sender
+  senderId        String
+  sender          User      @relation("SenderTransfers", fields: [senderId], references: [id])
+
+  // Recipient
+  recipientId     String
+  recipient       Recipient @relation(fields: [recipientId], references: [id])
+
+  // Amounts
+  amountUsd       Decimal   @db.Decimal(10, 2)  // Amount in USD
+  feeUsd          Decimal   @db.Decimal(10, 2)  // Our fee in USD
+  totalUsd        Decimal   @db.Decimal(10, 2)  // Total charged
+  exchangeRate    Decimal   @db.Decimal(10, 4)  // USD to MXN rate
+  amountMxn       Decimal   @db.Decimal(10, 2)  // Amount recipient gets
+
+  // Status
+  status          TransferStatus @default(PENDING)
+
+  // Payment (Stripe)
+  stripePaymentId String?
+
+  // Blockchain (Stellar)
+  stellarTxHash   String?
+
+  // Payout (Bitso)
+  bitsoWithdrawId String?
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  paidAt          DateTime?
+  completedAt     DateTime?
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([trackingNumber])
+  @@index([status])
+}
+
+enum TransferStatus {
+  PENDING           // Just created
+  PAYMENT_PROCESSING // Stripe charging card
+  PAYMENT_FAILED    // Card declined
+  PAID              // Money received from sender
+  BLOCKCHAIN_PENDING // Sending USDC
+  BLOCKCHAIN_CONFIRMED // USDC sent
+  PAYOUT_PENDING    // Converting to MXN
+  PAYOUT_PROCESSING // Sending to recipient bank
+  COMPLETED         // Done!
+  FAILED            // Something went wrong
+  REFUNDED          // Money returned to sender
+}
+
+// ─────────────────────────────────────────────────────────────
+// VERIFICATION CODES - For phone verification
+// ─────────────────────────────────────────────────────────────
+
+model VerificationCode {
+  id        String   @id @default(uuid())
+  phone     String
+  code      String   // 6-digit code
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, code])
+}

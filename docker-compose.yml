@@ -1,0 +1,87 @@
+# ╔═══════════════════════════════════════════════════════════╗
+# ║                  DOCKER COMPOSE                           ║
+# ║           Run everything with one command                 ║
+# ╚═══════════════════════════════════════════════════════════╝
+
+version: '3.8'
+
+services:
+  # ─────────────────────────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: remesa-db
+    environment:
+      POSTGRES_USER: remesa
+      POSTGRES_PASSWORD: remesa_secret_password
+      POSTGRES_DB: remesa_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U remesa"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────
+  # Backend API
+  # ─────────────────────────────────────────────────────────────
+  api:
+    build: .
+    container_name: remesa-api
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://remesa:remesa_secret_password@postgres:5432/remesa_db
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      # Add your API keys here or use .env file
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # Mount source for development hot-reload
+      - .:/app
+      - /app/node_modules
+    command: >
+      sh -c "npx prisma migrate deploy && npm run dev"
+
+  # ─────────────────────────────────────────────────────────────
+  # Prisma Studio (Database GUI) - Optional
+  # ─────────────────────────────────────────────────────────────
+  prisma-studio:
+    build: .
+    container_name: remesa-studio
+    environment:
+      DATABASE_URL: postgresql://remesa:remesa_secret_password@postgres:5432/remesa_db
+    ports:
+      - "5555:5555"
+    depends_on:
+      - postgres
+    command: npx prisma studio
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+
+# ─────────────────────────────────────────────────────────────
+# USAGE:
+#
+#   Start everything:
+#     docker-compose up -d
+#
+#   View logs:
+#     docker-compose logs -f api
+#
+#   Stop everything:
+#     docker-compose down
+#
+#   With Prisma Studio:
+#     docker-compose --profile tools up -d
+#
+# ─────────────────────────────────────────────────────────────
