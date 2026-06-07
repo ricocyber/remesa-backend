@@ -14,6 +14,8 @@ const authRoutes = require('./routes/auth');
 const transferRoutes = require('./routes/transfers');
 const userRoutes = require('./routes/users');
 const webhookRoutes = require('./routes/webhooks');
+const proofRailRoutes = require('./routes/proofRail');
+const assetActionRoutes = require('./routes/assetActions');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
@@ -65,6 +67,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/transfers', transferRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/proof-rail', proofRailRoutes);
+app.use('/api', assetActionRoutes);
 
 // ─────────────────────────────────────────────────────────────
 // ERROR HANDLING

@@ -78,6 +78,16 @@ GET  /api/transfers/:id           # Get transfer details
 GET  /api/transfers/track/:num    # Track by number
 ```
 
+### Asset Actions (NerveSystem Receipt API)
+
+```
+POST /api/asset-actions/request                    # request_move
+POST /api/asset-actions/:id/check-rules           # check_rules
+POST /api/asset-actions/:id/sign-receipt          # sign_receipt
+POST /api/asset-actions/:id/verify-settlement     # verify_settlement
+GET  /api/asset-actions/:id/audit-trail           # audit_trail
+```
+
 ## Architecture
 
 ```

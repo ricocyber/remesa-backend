@@ -5,19 +5,16 @@
 
 const twilio = require('twilio');
 
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+const TWILIO_READY = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_ACCOUNT_SID.startsWith('AC');
+const client = TWILIO_READY ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : null;
 
 // ─────────────────────────────────────────────────────────────
 // Send SMS
 // ─────────────────────────────────────────────────────────────
 
 async function sendSms(to, body) {
-  // In development, just log instead of sending
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`\n📱 SMS to ${to}: ${body}\n`);
+  if (!TWILIO_READY || process.env.NODE_ENV === 'development') {
+    console.log(`[SMS mock] to=${to}: ${body}`);
     return { success: true, mock: true };
   }
 
