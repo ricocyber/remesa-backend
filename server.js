@@ -9,13 +9,19 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
-// Import routes
-const authRoutes = require('./routes/auth');
-const transferRoutes = require('./routes/transfers');
-const userRoutes = require('./routes/users');
-const webhookRoutes = require('./routes/webhooks');
+// Import routes — DB-free routes always load
 const proofRailRoutes = require('./routes/proofRail');
 const assetActionRoutes = require('./routes/assetActions');
+
+// DB-dependent routes only load when DATABASE_URL is set
+const DB_READY = !!process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost');
+let authRoutes, transferRoutes, userRoutes, webhookRoutes;
+if (DB_READY) {
+  authRoutes = require('./routes/auth');
+  transferRoutes = require('./routes/transfers');
+  userRoutes = require('./routes/users');
+  webhookRoutes = require('./routes/webhooks');
+}
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
@@ -62,13 +68,21 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/transfers', transferRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/webhooks', webhookRoutes);
+// DB-free routes — always available
 app.use('/api/proof-rail', proofRailRoutes);
 app.use('/api', assetActionRoutes);
+
+// DB-dependent routes — only when Postgres is connected
+if (DB_READY) {
+  app.use('/api/auth', authRoutes);
+  app.use('/api/transfers', transferRoutes);
+  app.use('/api/users', userRoutes);
+  app.use('/api/webhooks', webhookRoutes);
+} else {
+  app.use('/api/auth', (req, res) => res.status(503).json({ error: 'Database not configured', status: 'coming_soon' }));
+  app.use('/api/transfers', (req, res) => res.status(503).json({ error: 'Database not configured', status: 'coming_soon' }));
+  app.use('/api/users', (req, res) => res.status(503).json({ error: 'Database not configured', status: 'coming_soon' }));
+}
 
 // ─────────────────────────────────────────────────────────────
 // ERROR HANDLING
