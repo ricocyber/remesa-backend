@@ -35,3 +35,4 @@ prisma/migrations/*_migration.sql
 # Test coverage
 coverage/
 *.env
+.vercel
