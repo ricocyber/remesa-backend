@@ -7,7 +7,7 @@ const express = require('express');
 const prisma = require('../models');
 const stripe = require('../services/stripe');
 const stellar = require('../services/stellar');
-const bitso = require('../services/bitso');
+const circle = require('../services/circle');
 const { sendSms } = require('../services/twilio');
 
 const router = express.Router();
@@ -102,31 +102,31 @@ async function handlePaymentSuccess(paymentIntent) {
     console.log(`⛓️ USDC sent on Stellar: ${stellarTx.hash}`);
 
     // ─────────────────────────────────────────────────────────
-    // STEP 2: Local cash-out via Bitso → SPEI (BLOCKING)
-    // USDC lands on Stellar → Bitso converts to MXN → SPEI to bank
+    // STEP 2: Cash-out via Circle Payouts → SPEI/CLABE (BLOCKING)
+    // USD → Circle Payouts API → CLABE → recipient bank account
     // ─────────────────────────────────────────────────────────
     await prisma.transfer.update({
       where: { id: transferId },
       data: { status: 'PAYOUT_PENDING' }
     });
 
-    const payout = await bitso.sendPayout({
-      amount: transfer.amountMxn,
-      currency: 'MXN',
-      recipientClabe: transfer.recipient.clabe,
+    const payout = await circle.createPayout({
+      transferId: transfer.id,
+      amountUsd: parseFloat(transfer.amountUsd),
+      clabe: transfer.recipient.clabe,
       recipientName: `${transfer.recipient.firstName} ${transfer.recipient.lastName}`,
-      reference: transfer.trackingNumber
+      country: transfer.recipient.country || 'MEX',
     });
 
     await prisma.transfer.update({
       where: { id: transferId },
       data: {
         status: 'PAYOUT_PROCESSING',
-        bitsoWithdrawId: payout.id
+        circlePayoutId: payout.circlePayoutId
       }
     });
 
-    console.log(`🌎 Payout initiated → ${transfer.recipient.country}: ${payout.id}`);
+    console.log(`🌎 Circle payout initiated → ${transfer.recipient.country}: ${payout.circlePayoutId}`);
 
     // ─────────────────────────────────────────────────────────
     // STEP 3: SMS notifications (parallel, non-blocking)

@@ -125,8 +125,8 @@ model Transfer {
   // Blockchain (Stellar)
   stellarTxHash   String?
 
-  // Payout (Bitso)
-  bitsoWithdrawId String?
+  // Payout (Circle)
+  circlePayoutId  String?
 
   // Timestamps
   createdAt       DateTime  @default(now())

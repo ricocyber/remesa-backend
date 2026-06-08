@@ -10,7 +10,7 @@ const { authenticate, requireKyc } = require('../middleware/auth');
 const { AppError } = require('../middleware/errorHandler');
 const stripe = require('../services/stripe');
 const stellar = require('../services/stellar');
-const bitso = require('../services/bitso');
+const circle = require('../services/circle');
 const { sendSms } = require('../services/twilio');
 const { screenOfac, requiresCtr, calculateExciseTax, buildRegEDisclosure } = require('../services/compliance');
 
@@ -36,7 +36,7 @@ router.get('/quote', async (req, res, next) => {
       throw new AppError(`Maximum amount is $${config.transfer.maxAmount}`, 400);
     }
 
-    const exchangeRate = await bitso.getExchangeRate('USD', 'MXN');
+    const exchangeRate = await circle.getExchangeRate('USD', country);
 
     let feeUsd = amountUsd * (config.transfer.feePercent / 100);
     if (feeUsd < config.transfer.minFee) feeUsd = config.transfer.minFee;
@@ -117,8 +117,8 @@ router.post('/', requireKyc, async (req, res, next) => {
       // Production: create CTR record and route to compliance officer
     }
 
-    // Get exchange rate
-    const exchangeRate = await bitso.getExchangeRate('USD', 'MXN');
+    // Get exchange rate from Circle
+    const exchangeRate = await circle.getExchangeRate('USD', recipient.country || 'MEX');
 
     // Calculate fee
     let feeUsd = amountUsd * (config.transfer.feePercent / 100);
@@ -166,6 +166,24 @@ router.post('/', requireKyc, async (req, res, next) => {
           status: 'PAYMENT_PROCESSING'
         }
       });
+
+      // Fire Circle payout to recipient CLABE (async — don't block response)
+      if (recipient.clabe) {
+        circle.createPayout({
+          transferId: transfer.id,
+          amountUsd: transfer.amountUsd,
+          clabe: recipient.clabe,
+          recipientName: `${recipient.firstName} ${recipient.lastName}`,
+          country: recipient.country || 'MEX',
+        }).then(async (payout) => {
+          await prisma.transfer.update({
+            where: { id: transfer.id },
+            data: { circlePayoutId: payout.circlePayoutId, status: 'PROCESSING' }
+          });
+        }).catch(err => {
+          console.error(`[Circle] Payout failed for transfer ${transfer.id}:`, err.message);
+        });
+      }
 
       res.status(201).json({
         success: true,
