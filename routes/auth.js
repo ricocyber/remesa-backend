@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../models');
 const config = require('../config');
 const { AppError } = require('../middleware/errorHandler');
+const { sendVerificationCode } = require('../services/notify');
 
 const router = express.Router();
 
@@ -18,33 +19,31 @@ const router = express.Router();
 
 router.post('/send-code', async (req, res, next) => {
   try {
-    const { phone } = req.body;
+    const { phone, email } = req.body;
+    const contact = email || phone;
 
-    if (!phone) {
-      throw new AppError('Phone number is required', 400, 'PHONE_REQUIRED');
+    if (!contact) {
+      throw new AppError('Phone or email is required', 400, 'CONTACT_REQUIRED');
     }
 
-    // Generate 6-digit code (use fixed code in development for easy testing)
     const code = process.env.NODE_ENV === 'development' ? '123456' :
                  Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Save code to database (expires in 10 minutes)
     await prisma.verificationCode.create({
       data: {
-        phone,
+        phone: contact,
         code,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000)
       }
     });
 
-    // In development, just log the code (no SMS needed)
-    console.log(`\n📱 Verification code for ${phone}: ${code}\n`);
+    const result = await sendVerificationCode(contact, code);
 
     res.json({
       success: true,
       message: 'Verification code sent',
-      // Include code in response during development for easy testing
-      ...(process.env.NODE_ENV === 'development' && { code })
+      channel: contact.includes('@') ? 'email' : 'sms',
+      ...(result.mock && { code }),
     });
 
   } catch (error) {
@@ -59,16 +58,16 @@ router.post('/send-code', async (req, res, next) => {
 
 router.post('/verify-code', async (req, res, next) => {
   try {
-    const { phone, code } = req.body;
+    const { phone, email, code } = req.body;
+    const contact = email || phone;
 
-    if (!phone || !code) {
-      throw new AppError('Phone and code are required', 400, 'MISSING_FIELDS');
+    if (!contact || !code) {
+      throw new AppError('Contact and code are required', 400, 'MISSING_FIELDS');
     }
 
-    // Find valid code
     const verification = await prisma.verificationCode.findFirst({
       where: {
-        phone,
+        phone: contact,
         code,
         used: false,
         expiresAt: { gt: new Date() }
@@ -87,15 +86,14 @@ router.post('/verify-code', async (req, res, next) => {
     });
 
     // Find or create user
-    let user = await prisma.user.findUnique({ where: { phone } });
+    let user = await prisma.user.findFirst({ where: contact.includes('@') ? { email: contact } : { phone: contact } });
     let isNewUser = false;
 
     if (!user) {
       user = await prisma.user.create({
-        data: {
-          phone,
-          phoneVerified: true
-        }
+        data: contact.includes('@')
+          ? { email: contact, phone: contact, phoneVerified: true }
+          : { phone: contact, phoneVerified: true }
       });
       isNewUser = true;
     } else {
