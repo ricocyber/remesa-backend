@@ -7,7 +7,7 @@ const express = require('express');
 const prisma = require('../models');
 const stripe = require('../services/stripe');
 const stellar = require('../services/stellar');
-const circle = require('../services/circle');
+const payout = require('../services/payout');
 const { sendSms } = require('../services/twilio');
 
 const router = express.Router();
@@ -110,23 +110,21 @@ async function handlePaymentSuccess(paymentIntent) {
       data: { status: 'PAYOUT_PENDING' }
     });
 
-    const payout = await circle.createPayout({
+    const result = await payout.sendPayout({
       transferId: transfer.id,
       amountUsd: parseFloat(transfer.amountUsd),
-      clabe: transfer.recipient.clabe,
-      recipientName: `${transfer.recipient.firstName} ${transfer.recipient.lastName}`,
-      country: transfer.recipient.country || 'MEX',
+      recipient: transfer.recipient,
     });
 
     await prisma.transfer.update({
       where: { id: transferId },
       data: {
         status: 'PAYOUT_PROCESSING',
-        circlePayoutId: payout.circlePayoutId
+        circlePayoutId: result.payoutId,
       }
     });
 
-    console.log(`🌎 Circle payout initiated → ${transfer.recipient.country}: ${payout.circlePayoutId}`);
+    console.log(`🌎 Payout initiated via ${result.rail} → ${transfer.recipient.country}: ${result.payoutId}`);
 
     // ─────────────────────────────────────────────────────────
     // STEP 3: SMS notifications (parallel, non-blocking)

@@ -72,7 +72,8 @@ model Recipient {
   payoutMethod  PayoutMethod @default(BANK_TRANSFER)
   bankName      String?
   bankAccount   String?   // Encrypted in production
-  clabe         String?   // Mexican bank code (18 digits)
+  clabe              String?   // Mexican bank code (18 digits)
+  stripeDebitToken   String?   // Stripe debit card token for instant payout
 
   // For cash pickup
   pickupLocation String?
