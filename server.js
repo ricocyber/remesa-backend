@@ -15,12 +15,13 @@ const assetActionRoutes = require('./routes/assetActions');
 
 // DB-dependent routes only load when DATABASE_URL is set
 const DB_READY = !!process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost');
-let authRoutes, transferRoutes, userRoutes, webhookRoutes;
+let authRoutes, transferRoutes, userRoutes, webhookRoutes, fundraisingRoutes;
 if (DB_READY) {
   authRoutes = require('./routes/auth');
   transferRoutes = require('./routes/transfers');
   userRoutes = require('./routes/users');
   webhookRoutes = require('./routes/webhooks');
+  fundraisingRoutes = require('./routes/fundraising');
 }
 
 // Import middleware
@@ -78,10 +79,12 @@ if (DB_READY) {
   app.use('/api/transfers', transferRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/webhooks', webhookRoutes);
+  app.use('/api/fundraising', fundraisingRoutes);
 } else {
   app.use('/api/auth', (req, res) => res.status(503).json({ error: 'Database not configured', status: 'coming_soon' }));
   app.use('/api/transfers', (req, res) => res.status(503).json({ error: 'Database not configured', status: 'coming_soon' }));
   app.use('/api/users', (req, res) => res.status(503).json({ error: 'Database not configured', status: 'coming_soon' }));
+  app.use('/api/fundraising', (req, res) => res.status(503).json({ error: 'Database not configured', status: 'coming_soon' }));
 }
 
 // ─────────────────────────────────────────────────────────────

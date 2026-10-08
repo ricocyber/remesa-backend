@@ -169,3 +169,78 @@ model VerificationCode {
 
   @@index([phone, code])
 }
+
+// ─────────────────────────────────────────────────────────────
+// INVESTOR - VC / Angel tracked in the fundraising CRM
+// ─────────────────────────────────────────────────────────────
+
+model Investor {
+  id            String          @id @default(uuid())
+  name          String
+  firm          String?
+  email         String          @unique
+  linkedinUrl   String?
+  focusAreas    String[]        // e.g. ["fintech", "latam", "remittance"]
+  checkSizeMin  Int?            // USD
+  checkSizeMax  Int?            // USD
+  stage         String?         // "pre-seed", "seed", "series-a"
+  notes         String?
+  stage_crm     InvestorStage   @default(PROSPECT)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  outreaches    InvestorOutreach[]
+
+  @@index([stage_crm])
+}
+
+enum InvestorStage {
+  PROSPECT       // Not yet contacted
+  CONTACTED      // First email sent
+  RESPONDED      // Replied to our email
+  MEETING        // Call/meeting scheduled or done
+  DUE_DILIGENCE  // Reviewing materials
+  COMMITTED      // Verbal or written commitment
+  PASSED         // Declined
+  INVESTED       // Wire received
+}
+
+// ─────────────────────────────────────────────────────────────
+// INVESTOR OUTREACH - AI-drafted & sent emails per investor
+// ─────────────────────────────────────────────────────────────
+
+model InvestorOutreach {
+  id           String         @id @default(uuid())
+  investorId   String
+  investor     Investor       @relation(fields: [investorId], references: [id])
+
+  type         OutreachType   @default(COLD)
+  subject      String
+  body         String         @db.Text
+  aiGenerated  Boolean        @default(true)
+  sentAt       DateTime?
+  openedAt     DateTime?
+  repliedAt    DateTime?
+  status       OutreachStatus @default(DRAFT)
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([investorId])
+  @@index([status])
+}
+
+enum OutreachType {
+  COLD        // First touch
+  FOLLOW_UP   // Nudge after no reply
+  MEETING_REQUEST
+  UPDATE      // Progress update
+}
+
+enum OutreachStatus {
+  DRAFT
+  SENT
+  OPENED
+  REPLIED
+  BOUNCED
+}
